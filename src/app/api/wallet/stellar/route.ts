@@ -10,13 +10,11 @@ import {
 import {
   ensureWallet,
   listTransactions,
-  mapConcurrent,
   markBalanceSynced,
   publicWallet,
 } from "@/lib/chain/wallets";
-import { ensureWallet, listTransactions, markBalanceSynced, publicWallet } from "@/lib/chain/wallets";
-import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { mapConcurrent } from "@/lib/concurrency";
+import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 
 export const dynamic = "force-dynamic";
 

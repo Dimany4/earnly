@@ -50,6 +50,7 @@ export interface TransactionRow {
   ledger: string | null;
   explorer_url: string | null;
   error: string | null;
+  reconcile_attempts?: number;
   created_at: string;
   status_synced_at: string | null;
 }
@@ -292,7 +293,12 @@ export async function findByIdempotencyKey(
 
 export async function updateTransaction(
   id: string,
-  patch: Partial<Pick<TransactionRow, "status" | "tx_hash" | "ledger" | "error" | "explorer_url">>
+  patch: Partial<
+    Pick<
+      TransactionRow,
+      "status" | "tx_hash" | "ledger" | "error" | "explorer_url" | "reconcile_attempts"
+    >
+  >
 ): Promise<TransactionRow | null> {
   const sql = db();
   const rows = (await sql`
@@ -302,6 +308,7 @@ export async function updateTransaction(
         ledger = coalesce(${patch.ledger ?? null}, ledger),
         error = coalesce(${patch.error ?? null}, error),
         explorer_url = coalesce(${patch.explorer_url ?? null}, explorer_url),
+        reconcile_attempts = coalesce(${patch.reconcile_attempts ?? null}, reconcile_attempts),
         status_synced_at = now()
     where id = ${id}
     returning *

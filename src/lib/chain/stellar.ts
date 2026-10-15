@@ -746,13 +746,26 @@ export async function sendPayment(input: PaymentInput): Promise<PaymentOutcome> 
   }
 }
 
+/** Grace period before a Horizon 404 marks a pending transaction as failed. */
+export const STELLAR_RECONCILE_GRACE_MS = STELLAR.reconcileGraceMs;
+/** Maximum 404 reconciliation attempts within the grace window before failing. */
+export const STELLAR_RECONCILE_MAX_ATTEMPTS = STELLAR.reconcileMaxAttempts;
+
+export interface ReconcileStellarRecord {
+  id: string;
+  tx_hash: string | null;
+  created_at?: string | Date | null;
+  status_synced_at?: string | Date | null;
+  reconcile_attempts?: number | null;
+}
+
 /**
  * Reconciles a recorded transaction against Horizon. Used to resolve rows left
  * `pending`/`unknown` and to keep our record in step with the network.
  */
 export async function reconcileStellarTransaction(
   userId: string,
-  record: { id: string; tx_hash: string | null }
+  record: ReconcileStellarRecord
 ): Promise<boolean> {
   if (!record.tx_hash) return false;
   try {
@@ -769,10 +782,28 @@ export async function reconcileStellarTransaction(
     return true;
   } catch (error) {
     if (isNotFound(error)) {
-      // Horizon has no such transaction: it was never included.
+      const nextAttempts = (record.reconcile_attempts ?? 0) + 1;
+      const createdAtMs =
+        record.created_at != null ? new Date(record.created_at).getTime() : Date.now();
+      const ageMs = Number.isFinite(createdAtMs) ? Math.max(0, Date.now() - createdAtMs) : 0;
+      const graceExpired =
+        ageMs >= STELLAR_RECONCILE_GRACE_MS || nextAttempts >= STELLAR_RECONCILE_MAX_ATTEMPTS;
+
+      if (!graceExpired) {
+        // Horizon has not ingested the transaction yet; keep it pending during the grace window.
+        await updateTransaction(record.id, {
+          status: "pending",
+          reconcile_attempts: nextAttempts,
+        });
+        return false;
+      }
+
+      // Past the grace window or max attempts: Horizon has no record of this transaction.
       await updateTransaction(record.id, {
         status: "failed",
-        error: "Stellar Testnet has no record of this transaction.",
+        reconcile_attempts: nextAttempts,
+        error:
+          "Stellar Testnet has no record of this transaction after the reconciliation grace period.",
       });
       return true;
     }
