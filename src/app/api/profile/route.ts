@@ -3,6 +3,7 @@ import { cleanEmail, cleanText } from "@/lib/auth";
 import { db, databaseConfigured } from "@/lib/db";
 import { getSession, loadUser } from "@/lib/session";
 import { ALL_SKILLS, MAX_SKILLS, mergeSkills } from "@/lib/skills";
+import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,14 @@ export async function GET() {
  * Everything is validated server-side; nothing is trusted from the browser.
  */
 export async function PUT(req: NextRequest) {
+  try {
+    assertSameOrigin(req);
+  } catch (e) {
+    if (e instanceof CsrfError)
+      return NextResponse.json({ error: e.message }, { status: 403 });
+    throw e;
+  }
+
   if (!databaseConfigured) {
     return NextResponse.json({ error: "Database is not configured." }, { status: 503 });
   }

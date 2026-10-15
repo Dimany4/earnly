@@ -3,6 +3,7 @@ import { cleanText } from "@/lib/auth";
 import { db, databaseConfigured } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { COUNTRIES, searchUniversities, type University } from "@/lib/universities";
+import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    assertSameOrigin(req);
+  } catch (e) {
+    if (e instanceof CsrfError)
+      return NextResponse.json({ error: e.message }, { status: 403 });
+    throw e;
+  }
+
   if (!databaseConfigured) {
     return NextResponse.json({ error: "Database is not configured." }, { status: 503 });
   }

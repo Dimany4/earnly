@@ -3,10 +3,19 @@ import { cleanEmail, signInWithEmail, signUpWithEmail } from "@/lib/auth";
 import { createSession, loadUser } from "@/lib/session";
 import { databaseConfigured } from "@/lib/db";
 import { provisionAfterSignIn } from "@/lib/chain/provisioning";
+import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  try {
+    assertSameOrigin(req);
+  } catch (e) {
+    if (e instanceof CsrfError)
+      return NextResponse.json({ error: e.message }, { status: 403 });
+    throw e;
+  }
+
   if (!databaseConfigured) {
     return NextResponse.json(
       { error: "Accounts are not configured on this deployment yet." },

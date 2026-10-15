@@ -8,6 +8,7 @@ import {
   reconcileStellarTransaction,
 } from "@/lib/chain/stellar";
 import { ensureWallet, listTransactions, markBalanceSynced, publicWallet } from "@/lib/chain/wallets";
+import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,14 @@ export const dynamic = "force-dynamic";
  * Horizon, the current fee, and merged activity.
  */
 export async function GET(request: Request) {
+  try {
+    assertSameOrigin(request);
+  } catch (e) {
+    if (e instanceof CsrfError)
+      return errorResponse("forbidden", e.message, 403);
+    throw e;
+  }
+
   const guard = await requireUser();
   if (!guard.ok) return guard.response;
 

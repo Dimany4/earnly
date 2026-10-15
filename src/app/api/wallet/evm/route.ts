@@ -3,11 +3,20 @@ import { errorResponse, okResponse, requireUser } from "@/lib/chain/api";
 import { evmActivityFor } from "@/lib/chain/activity";
 import { EvmError, assertSepolia, evmSnapshot, reconcileEvmTransaction } from "@/lib/chain/evm";
 import { ensureWallet, listTransactions, markBalanceSynced, publicWallet } from "@/lib/chain/wallets";
+import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 
 export const dynamic = "force-dynamic";
 
 /** Ethereum Sepolia dashboard payload: address, live balance and activity. */
 export async function GET(request: Request) {
+  try {
+    assertSameOrigin(request);
+  } catch (e) {
+    if (e instanceof CsrfError)
+      return errorResponse("forbidden", e.message, 403);
+    throw e;
+  }
+
   const guard = await requireUser();
   if (!guard.ok) return guard.response;
 
