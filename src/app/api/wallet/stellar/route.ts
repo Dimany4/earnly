@@ -14,6 +14,9 @@ import {
   markBalanceSynced,
   publicWallet,
 } from "@/lib/chain/wallets";
+import { ensureWallet, listTransactions, markBalanceSynced, publicWallet } from "@/lib/chain/wallets";
+import { assertSameOrigin, CsrfError } from "@/lib/csrf";
+import { mapConcurrent } from "@/lib/concurrency";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +25,14 @@ export const dynamic = "force-dynamic";
  * Horizon, the current fee, and merged activity.
  */
 export async function GET(request: Request) {
+  try {
+    assertSameOrigin(request);
+  } catch (e) {
+    if (e instanceof CsrfError)
+      return errorResponse("forbidden", e.message, 403);
+    throw e;
+  }
+
   const guard = await requireUser();
   if (!guard.ok) return guard.response;
 
@@ -44,6 +55,12 @@ export async function GET(request: Request) {
         // Best effort: a Horizon hiccup must not break the dashboard
       }
     });
+    // Bounded-concurrency reconcile — 5 Horizon/RPC calls at a time
+    // instead of serial (each was an unbounded round-trip). Per-row
+    // failures collect into `failures`; one stuck row can't block the batch.
+    await mapConcurrent(rows.filter(
+      (row) => (row.status === "pending" || row.status === "unknown") && row.tx_hash
+    ), 5, (row) => reconcileStellarTransaction(guard.user.id, row));
 
     const [account, fees] = await Promise.all([accountSnapshot(wallet.address), feeStats()]);
     const activity = await stellarActivityFor(wallet, historyLimit);
