@@ -343,3 +343,34 @@ export async function getTransaction(
   `) as TransactionRow[];
   return rows[0] ?? null;
 }
+
+/**
+ * Concurrently processes an array of items with bounded concurrency.
+ * Ensures that individual worker errors are caught so one failing item
+ * does not abort or reject the remaining batch.
+ */
+export async function mapConcurrent<T, R>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<R>
+): Promise<(R | undefined)[]> {
+  const cap = Math.max(1, Math.min(limit, items.length));
+  if (items.length === 0) return [];
+
+  const results: (R | undefined)[] = new Array(items.length);
+  let nextIndex = 0;
+
+  const runners = Array.from({ length: cap }, async () => {
+    while (nextIndex < items.length) {
+      const current = nextIndex++;
+      try {
+        results[current] = await worker(items[current]);
+      } catch {
+        // Error isolation: one failing task does not reject others
+      }
+    }
+  });
+
+  await Promise.all(runners);
+  return results;
+}
