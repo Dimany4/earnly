@@ -8,7 +8,6 @@ import { errorResponse } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-const VERIFICATION = ["required", "pending", "verified", "failed"] as const;
 
 function stringList(value: unknown, max: number, itemMax = 40): string[] | null {
   if (!Array.isArray(value)) return null;
@@ -72,10 +71,9 @@ export async function PUT(req: NextRequest) {
     if (Number.isInteger(year) && year >= 1950 && year <= 2045) set("grad_year", year);
   }
 
-  if (body.verification !== undefined) {
-    const value = String(body.verification);
-    if ((VERIFICATION as readonly string[]).includes(value)) set("verification", value);
-  }
+  // `verification` is deliberately not writable here (issue #1): the
+  // trust flag only ever changes through the server-side verification
+  // workflow — a client-sent value is ignored outright.
 
   if (body.onboarded !== undefined) set("onboarded", Boolean(body.onboarded));
 
