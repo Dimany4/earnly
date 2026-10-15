@@ -136,20 +136,27 @@ export async function PUT(req: NextRequest) {
       // The browser sends the full desired set, so this is a replace, not a merge.
       const desired = mergeSkills([], body.skills as string[]).slice(0, MAX_SKILLS);
       const wanted = new Map(desired.map((s) => [s.toLowerCase(), s]));
-      for (const row of existing) {
-        if (!wanted.has(row.skill.toLowerCase())) {
-          await sql`delete from user_skills where user_id = ${session.id} and skill = ${row.skill}`;
-        }
-      }
       const known = new Set(existing.map((s) => s.skill.toLowerCase()));
-      for (const [key, skill] of wanted) {
-        if (known.has(key)) continue;
-        await sql`
+      const additions = [...wanted.entries()]
+        .filter(([key]) => !known.has(key))
+        .map(([, skill]) => skill);
+      // Set-based sync inside one transaction — ≤3 statements regardless
+      // of how many skills changed, all-or-nothing (issue #22).
+      // Case-insensitive matching preserved via lower() comparisons.
+      const sync = [
+        sql`delete from user_skills
+            where user_id = ${session.id}
+            and lower(skill) <> all(${desired.map((s) => s.toLowerCase())}::text[])`,
+      ];
+      if (additions.length) {
+        sync.push(sql`
           insert into user_skills (user_id, skill, custom)
-          values (${session.id}, ${skill}, ${!ALL_SKILLS.includes(skill)})
+          select ${session.id}, s, not (s = any(${ALL_SKILLS}::text[]))
+          from unnest(${additions}::text[]) s
           on conflict (user_id, skill) do nothing
-        `;
+        `);
       }
+      await sql.transaction(sync);
     }
 
     const user = await loadUser(session.id);
