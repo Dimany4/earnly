@@ -4,6 +4,7 @@ import { evmActivityFor } from "@/lib/chain/activity";
 import { EvmError, assertSepolia, evmSnapshot, reconcileEvmTransaction } from "@/lib/chain/evm";
 import { ensureWallet, listTransactions, markBalanceSynced, publicWallet } from "@/lib/chain/wallets";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
+import { mapConcurrent } from "@/lib/concurrency";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +28,10 @@ export async function GET(request: Request) {
     const wallet = await ensureWallet(guard.user.id, "evm");
 
     const rows = await listTransactions(guard.user.id, "evm", 25);
-    for (const row of rows) {
-      if ((row.status === "pending" || row.status === "unknown") && row.tx_hash) {
-        await reconcileEvmTransaction(row.id, row.tx_hash);
-      }
-    }
+    // Bounded-concurrency reconcile — same pattern as the stellar route.
+    await mapConcurrent(rows.filter(
+      (row) => (row.status === "pending" || row.status === "unknown") && row.tx_hash
+    ), 5, (row) => reconcileEvmTransaction(row.id, row.tx_hash!));
 
     await assertSepolia();
     const snapshot = await evmSnapshot(wallet.address);

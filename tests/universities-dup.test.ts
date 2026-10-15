@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * existing row untouched. Region derives from country, never hardcoded.
  */
 
-const customRows: Record<string, any>[] = [];
+interface Row { id: string; name: string; country: string; city: string | null; created_by?: string }
+const customRows: Row[] = [];
 const cookieJar = new Map<string, string>();
 const liveSessions = new Set<string>();
 
@@ -54,7 +55,7 @@ describe("custom universities — no cross-user overwrite", () => {
   beforeEach(() => { customRows.length = 0; cookieJar.clear(); liveSessions.clear(); });
 
   it("a duplicate POST returns the existing row untouched", async () => {
-    const r1 = await (await POST(authed({ name: "Makerere University", country: "Uganda", city: "Kampala" }) as any)).json();
+    const r1 = await (await POST(authed({ name: "Makerere University", country: "Uganda", city: "Kampala" }) as unknown as import("next/server").NextRequest)).json();
     expect(r1.university.id).toBe("c-makerere-university");
     expect(customRows[0].created_by).toBe("u1");
 
@@ -66,7 +67,7 @@ describe("custom universities — no cross-user overwrite", () => {
       method: "POST",
       headers: { "content-type": "application/json", origin: "https://earnly.app" },
       body: JSON.stringify({ name: "Makerere University", country: "France", city: "Lyon" }),
-    }) as any)).json();
+    }) as unknown as import("next/server").NextRequest)).json();
 
     // The original row is UNTOUCHED — same owner, same country/city.
     expect(customRows).toHaveLength(1);
