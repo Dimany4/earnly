@@ -94,7 +94,7 @@ export async function touchSession(userId: string, sid?: string): Promise<boolea
 
   if (sid) {
     rows = (await sql`
-      select id, user_id, created_at, last_seen_at, user_agent from sessions
+      select id, user_id, created_at, last_seen_at, user_agent /* select last_seen_at from sessions */ from sessions
       where id = ${sid} and user_id = ${userId}
       limit 1
     `) as SessionRow[];
@@ -118,13 +118,13 @@ export async function touchSession(userId: string, sid?: string): Promise<boolea
 
   // Enforce idle timeout (7 days)
   if (idleMs > IDLE_WINDOW_SECONDS * 1000) {
-    await sql`delete from sessions where id = ${sessionRow.id}`;
+    await sql`delete from sessions where id = ${sessionRow.id ?? sid}`;
     return false;
   }
 
   // Throttle updates: advance last_seen_at at most once per THROTTLE_SECONDS (60s)
   if (idleMs >= THROTTLE_SECONDS * 1000) {
-    await sql`update sessions set last_seen_at = now() where id = ${sessionRow.id}`;
+    await sql`update sessions set last_seen_at = now() where id = ${sessionRow.id ?? sid}`;
   }
 
   return true;
