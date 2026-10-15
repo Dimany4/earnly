@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { OPPORTUNITIES, findOpportunity } from "@/lib/data";
-import { useApp } from "@/lib/store";
+import {useApp, NOTE_MAX} from "@/lib/store";
 import { deadlineIn, postedAgo } from "@/lib/format";
 import {
   Button,
@@ -184,6 +184,11 @@ export function OpportunityDetail({ id }: { id: string }) {
                     {existing ? `Application ${existing.stage.toLowerCase()}` : "Application sent"}
                   </span>
                 </div>
+                {existing?.note && (
+                  <p className="mt-2 rounded-[10px] border border-rule bg-ground p-3 text-[13px] text-ink2">
+                    <span className="font-semibold">Your note:</span> {existing.note}
+                  </p>
+                )}
                 <p className="mt-2 text-[13px] text-ink2">
                   {o.org} will reply through Earnly. You can follow the stage under My work.
                 </p>
@@ -288,6 +293,7 @@ export function OpportunityDetail({ id }: { id: string }) {
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
+            maxLength={NOTE_MAX}
             rows={4}
             placeholder="Two lines about why you can do this, and when you are free."
             className="w-full resize-none rounded-[14px] border border-rule bg-transparent p-3 text-[14px] outline-none placeholder:text-ink3"
@@ -301,9 +307,10 @@ export function OpportunityDetail({ id }: { id: string }) {
           full
           className="mt-5"
           onClick={() => {
-            apply(o.id);
+            apply(o.id, note.trim() || undefined);
             setApplied(true);
             setOpenApply(false);
+            setNote("");
           }}
         >
           Send application

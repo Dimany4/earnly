@@ -86,6 +86,59 @@ const initial: Persisted = {
   theme: "light",
 };
 
+/**
+ * Persisted-payload versioning (issue #27).
+ *
+ * The stored value is an envelope `{ v, data }`: `v` is the schema
+ * version, `data` the Persisted slice. Payloads written before the
+ * envelope existed are version 0 (a bare Persisted object) and migrate
+ * forward through MIGRATIONS.
+ *
+ * Rules: missing/unparsable → `initial` (never throw); older → migrate
+ * each version step; newer (a payload from a future deploy) → `initial`,
+ * never half-apply.
+ */
+export const SCHEMA_VERSION = 1;
+
+interface Envelope {
+  v: number;
+  data: unknown;
+}
+
+/** MIGRATIONS[n] upgrades a v<n> payload's data to v<n+1>. */
+const MIGRATIONS: Record<number, (data: unknown) => unknown> = {
+  // v0 → v1: the pre-envelope bare Persisted object carries forward
+  // verbatim — the shape itself hasn't changed; this documents the
+  // migration seam for the next shape change.
+  0: (data) => data,
+};
+
+export function loadPersisted(raw: string | null): Persisted {
+  if (!raw) return initial;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return initial;                          // corrupt JSON → defaults
+  }
+  if (!parsed || typeof parsed !== "object") return initial;
+  const env = parsed as Partial<Envelope>;
+  let version = typeof env.v === "number" ? env.v : 0;
+  let data: unknown = version === 0 ? parsed : env.data;
+  if (version > SCHEMA_VERSION) return initial;   // future payload — discard
+  while (version < SCHEMA_VERSION) {
+    const step = MIGRATIONS[version];
+    if (!step) return initial;                     // chain gap — discard
+    data = step(data);
+    version++;
+  }
+  return { ...initial, ...(data as Persisted) };
+}
+
+export function serializePersisted(state: Persisted): string {
+  return JSON.stringify({ v: SCHEMA_VERSION, data: state } satisfies Envelope);
+}
+
 export interface ProfilePatch {
   fullName?: string;
   course?: string;
@@ -127,7 +180,7 @@ interface Ctx extends Persisted {
   resetVerification: () => Promise<boolean>;
   completeOnboarding: (prefs: AiPrefs, patch?: ProfilePatch) => Promise<boolean>;
   saveAiPrefs: (prefs: AiPrefs) => void;
-  apply: (opportunityId: string) => void;
+  apply: (opportunityId: string, note?: string) => void;
   advance: (applicationId: string) => void;
   toggleSaved: (opportunityId: string) => void;
   markAllRead: () => void;
@@ -137,10 +190,30 @@ interface Ctx extends Persisted {
   reset: () => void;
 }
 
+/** Max length for an application note — enforced client-side (textarea)
+ * and store-side (truncate). Documented in the apply flow. */
+export const NOTE_MAX = 500;
+
+/** Build the application record for a fresh apply. The note is optional;
+ *  when present it's truncated to NOTE_MAX (store-side defense — the UI
+ *  caps the textarea but a caller could bypass it). */
+export function buildApplication(
+  opportunityId: string,
+  note?: string,
+): Application {
+  return {
+    id: `a${Date.now()}`,
+    opportunityId,
+    stage: "Applied",
+    updatedDaysAgo: 0,
+    ...(note ? { note: note.slice(0, NOTE_MAX) } : {}),
+  };
+}
+
 const AppCtx = createContext<Ctx | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<Persisted>(initial);
+const [state, setState] = useState<Persisted>(initial);
   const [ready, setReady] = useState(false);
   const [aiResults, setAiResults] = useState<AiResult[] | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -177,7 +250,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       // one synchronous setState is the intentional hand-off from SSR. The
       // splash in AppShell keeps the first paint identical.
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (raw) setState({ ...initial, ...(JSON.parse(raw) as Persisted) });
+      if (raw) setState(loadPersisted(raw));
     } catch {
       /* a prototype store; a corrupt value just starts fresh */
     }
@@ -194,7 +267,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!ready) return;
     try {
-      window.localStorage.setItem(KEY, JSON.stringify(state));
+      window.localStorage.setItem(KEY, serializePersisted(state));
     } catch {
       /* private mode */
     }
@@ -308,19 +381,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       saveAiPrefs: (prefs) => {
         void save({ aiPrefs: prefs }, { quiet: true });
       },
-      apply: (opportunityId) =>
+      apply: (opportunityId, note) =>
         setState((s) =>
           s.applications.some((a) => a.opportunityId === opportunityId)
             ? s
             : {
                 ...s,
                 applications: [
-                  {
-                    id: `a${Date.now()}`,
-                    opportunityId,
-                    stage: "Applied" as AppStage,
-                    updatedDaysAgo: 0,
-                  },
+                  buildApplication(opportunityId, note),
                   ...s.applications,
                 ],
               }
