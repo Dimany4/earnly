@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cleanText } from "@/lib/auth";
 import { db, databaseConfigured } from "@/lib/db";
 import { getSession } from "@/lib/session";
-import { COUNTRIES, searchUniversities, type University } from "@/lib/universities";
+import { COUNTRIES, regionForCountry, searchUniversities, type University } from "@/lib/universities";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { errorResponse } from "@/lib/api";
 
@@ -19,7 +19,7 @@ async function customUniversities(): Promise<University[]> {
       name: r.name,
       country: r.country,
       city: r.city ?? "",
-      region: "Africa" as University["region"],
+      region: regionForCountry(r.country) ?? "Africa",
     }));
   } catch (error) {
     console.error("[earnly] custom university lookup failed", error);
@@ -74,12 +74,25 @@ export async function POST(req: NextRequest) {
     const rows = (await db()`
       insert into custom_universities (id, name, country, city, created_by)
       values (${id}, ${name}, ${country}, ${city}, ${session.id})
-      on conflict (id) do update set name = excluded.name
+      on conflict (id) do nothing
       returning id, name, country, city
     `) as { id: string; name: string; country: string; city: string | null }[];
+    if (!rows[0]) {
+      // Id exists — another user's row wins: never overwrite someone
+      // else's university. Return the existing row unchanged (the UI
+      // lands on the same university either way).
+      const existing = (await db()`
+        select id, name, country, city from custom_universities where id = ${id}
+      `) as { id: string; name: string; country: string; city: string | null }[];
+      const row = existing[0];
+      return NextResponse.json({
+        university: { id: row.id, name: row.name, country: row.country,
+          city: row.city ?? "", region: regionForCountry(row.country) ?? "Africa" },
+      });
+    }
     const row = rows[0];
     return NextResponse.json({
-      university: { id: row.id, name: row.name, country: row.country, city: row.city ?? "", region: "Africa" },
+      university: { id: row.id, name: row.name, country: row.country, city: row.city ?? "", region: regionForCountry(row.country) ?? "Africa" },
     });
   } catch (error) {
     console.error("[earnly] custom university insert failed", error);
