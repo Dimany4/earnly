@@ -112,6 +112,8 @@ export function Browse({
             <button
               key={m}
               onClick={() => setMode(m)}
+              aria-pressed={mode === m}
+              aria-label={m === "All" ? "All work modes" : undefined}
               className={`flex-none rounded-full border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
                 mode === m ? "border-accent bg-accent text-onaccent" : "border-rule text-ink2"
               }`}
@@ -126,6 +128,8 @@ export function Browse({
             <button
               key={c}
               onClick={() => setCat(c)}
+              aria-pressed={cat === c}
+              aria-label={c === "All" ? "All categories" : undefined}
               className={`rounded-full px-2.5 py-1 text-[11.5px] transition-colors ${
                 cat === c ? "bg-ink text-ground" : "text-ink3 hover:text-ink"
               }`}
@@ -144,6 +148,8 @@ export function Browse({
             <button
               key={p}
               onClick={() => setMinPay(p)}
+              aria-pressed={minPay === p}
+              aria-label={p === 0 ? "Any minimum pay" : `Minimum pay ${p}+`}
               className={`rounded-full px-2.5 py-1 font-semibold transition-colors ${
                 minPay === p ? "bg-accent/20 text-accentx" : "hover:text-ink"
               }`}
@@ -169,6 +175,9 @@ export function Browse({
                 setCat("All");
                 setMode("All");
                 setMinPay(0);
+                setSavedOnly(false);
+                setSort("match");
+                setVisible(6);
               }}
             >
               Clear filters
