@@ -24,7 +24,9 @@ function apply(text: string, values: unknown[]): unknown[] {
       university_city: null, university_custom: false, location: null, bio: null,
       onboarding_step: 0, availability: [], looking_for: [], work_area: "" }];
   if (text.includes("select distinct provider")) return [];
-  if (text.includes("select 1 from sessions")) return [{ "?column?": 1 }];
+  if (text.includes("select last_seen_at from sessions"))
+    return [{ last_seen_at: new Date() }];
+  if (text.includes("update sessions set last_seen_at")) return [];
   if (text.includes("delete from user_skills")) {
     const [, keep] = values;
     const keepLc = new Set((keep as string[]).map((s: string) => s.toLowerCase()));
@@ -58,7 +60,11 @@ function makeSql() {
       },
     };
     return descriptor;
-  }) as never;
+  }) as unknown as {
+    (strings: TemplateStringsArray, ...values: unknown[]): unknown;
+    query: (text: string, params: unknown[]) => Promise<unknown[]>;
+    transaction: (q: { queryData: { strings: string[]; values: unknown[] } }[]) => Promise<void>;
+  };
   sql.query = async (text: string, params: unknown[]) => {
     statementLog.push({ text: text.toLowerCase(), params });
     return apply(text.toLowerCase(), params);

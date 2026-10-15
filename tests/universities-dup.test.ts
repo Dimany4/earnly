@@ -26,7 +26,9 @@ function sql(strings: TemplateStringsArray, ...params: unknown[]) {
   if (text.includes("select * from profiles")) return Promise.resolve([]);
   if (text.includes("select skill from user_skills")) return Promise.resolve([]);
   if (text.includes("select distinct provider")) return Promise.resolve([]);
-  if (text.includes("select 1 from sessions")) return Promise.resolve(liveSessions.size ? [{ "?column?": 1 }] : []);
+  if (text.includes("select last_seen_at from sessions"))
+    return Promise.resolve(liveSessions.size ? [{ last_seen_at: new Date() }] : []);
+  if (text.includes("update sessions set last_seen_at")) return Promise.resolve([]);
   return Promise.resolve([]);
 }
 

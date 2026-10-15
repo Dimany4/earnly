@@ -65,15 +65,32 @@ export type SessionUser = {
   providers: string[];
 };
 
+/** Idle window: unused sessions die at 7 days even though the cookie's
+ * absolute cap stays 30 days (issue #24). */
+export const IDLE_MS = 7 * 24 * 60 * 60 * 1000;
+
 export async function getSession(): Promise<SessionUser | null> {
   const store = await cookies();
   const token = readSessionToken(store.get(SESSION_COOKIE)?.value);
   if (!token) return null;
   const sql = db();
   // The row IS the session — gone (revoked/expired-swept) means the
-  // token is dead even though its MAC still verifies.
-  const live = (await sql`select 1 from sessions where id = ${token.sid} limit 1`);
-  if (!live[0]) return null;
+  // token is dead even though its MAC still verifies. Reads also drive
+  // activity tracking: an idle-expired session is rejected + removed,
+  // and last_seen_at bumps — throttled to at most one write per minute
+  // per session so hot routes don't amplify.
+  const rows = (await sql`select last_seen_at from sessions where id = ${token.sid} limit 1`) as {
+    last_seen_at: Date | string;
+  }[];
+  const row = rows[0];
+  if (!row) return null;
+  const lastSeen = new Date(row.last_seen_at).getTime();
+  if (Date.now() - lastSeen > IDLE_MS) {
+    await sql`delete from sessions where id = ${token.sid}`;
+    return null;
+  }
+  await sql`update sessions set last_seen_at = now()
+            where id = ${token.sid} and last_seen_at < now() - interval '1 minute'`;
   return loadUser(token.uid);
 }
 
