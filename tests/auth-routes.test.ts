@@ -19,7 +19,8 @@ const viDbState = {
 
 function makeRouteSql() {
   const query = vi.fn(async () => []);
-  const tag = Object.assign(vi.fn(async () => []), { query });
+  const transaction = vi.fn(async () => []);
+  const tag = Object.assign(vi.fn(async () => []), { query, transaction });
   return tag;
 }
 
@@ -140,9 +141,9 @@ describe("POST /api/auth/email", () => {
   });
 
   it("creates a session and provisions on success", async () => {
-    vi.mocked(signUpWithEmail).mockResolvedValue({ ok: true, userId: "user-1" });
+    vi.mocked(signInWithEmail).mockResolvedValue({ ok: true, userId: "user-1" });
     const response = await emailRoute.POST(
-      jsonReq(url, "POST", { email: "ada@example.com", password: "longenough" })
+      jsonReq(url, "POST", { mode: "signin", email: "ada@example.com", password: "longenough" })
     );
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ ok: true });

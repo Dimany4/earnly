@@ -74,13 +74,11 @@ describe("cleanText", () => {
 });
 
 describe("signUpWithEmail", () => {
-  it("refuses a duplicate email without hashing", async () => {
+  it("returns enumeration-safe success with empty userId on duplicate email", async () => {
     viSqlState.handler = (text) =>
       text.includes("from auth_accounts") ? [{ id: "acc-1" }] : [];
     const result = await signUpWithEmail("ada@example.com", "longenough");
-    expect(result).toMatchObject({ ok: false });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toMatch(/already uses/i);
+    expect(result).toEqual({ ok: true, userId: "" });
   });
 
   it("normalizes casing before the duplicate check", async () => {

@@ -6,7 +6,6 @@ const appUrl = process.env.APP_URL || "https://earnly.vercel.app";
 const metadataBaseUrl = appUrl.startsWith("http://") || appUrl.startsWith("https://") ? appUrl : `https://${appUrl}`;
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.APP_URL || "https://earnly-app.vercel.app"),
   metadataBase: new URL(metadataBaseUrl),
   title: "Earnly — earn while you learn",
   description:
