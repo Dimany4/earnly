@@ -18,12 +18,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: lint + test + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20.x
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -44,3 +64,11 @@ jobs:
           GOOGLE_CLIENT_ID: "ci_dummy_google_client_id"
           AUTH_SECRET: "ci_dummy_auth_secret_at_least_32_characters_long"
           APP_URL: "http://localhost:3000"
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
