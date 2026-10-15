@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -15,10 +16,11 @@ import {
   DEMO_TXNS,
 } from "./data";
 import { DEFAULT_PREFS } from "./ai";
+import { ActivityClient, activitySlice } from "./activity-client";
+import type { ActivityState } from "./activity-types";
 import type {
   AiPrefs,
   AiResult,
-  AppStage,
   Application,
   Notif,
   Student,
@@ -202,7 +204,7 @@ export function buildApplication(
   note?: string,
 ): Application {
   return {
-    id: `a${Date.now()}`,
+    id: `a${Date.now()}-${crypto.randomUUID()}`,
     opportunityId,
     stage: "Applied",
     updatedDaysAgo: 0,
@@ -213,17 +215,25 @@ export function buildApplication(
 const AppCtx = createContext<Ctx | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-const [state, setState] = useState<Persisted>(initial);
+  const [state, setState] = useState<Persisted>(initial);
+  const [activity] = useState(() => new ActivityClient(initial, (slice) => setState((s) => ({ ...s, ...slice }))));
+  const refreshVersion = useRef(0);
+  const demoActivity = useRef<ActivityState>(activitySlice(initial));
   const [ready, setReady] = useState(false);
   const [aiResults, setAiResults] = useState<AiResult[] | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
   const [database, setDatabase] = useState(false);
 
   const refresh = useCallback(async () => {
+    const version = ++refreshVersion.current;
     try {
       const res = await fetch("/api/auth/session", { cache: "no-store" });
+      if (!res.ok) throw new Error("Session lookup failed.");
       const data = (await res.json()) as { user: SessionUser | null; database?: boolean };
+      if (version !== refreshVersion.current) return;
       setDatabase(Boolean(data.database));
+      const id = data.user?.id ?? null;
+      if (!activity.belongsTo(id)) activity.reset(id);
       setUser(data.user ?? null);
       if (data.user?.profile) {
         setState((s) => ({
@@ -234,10 +244,19 @@ const [state, setState] = useState<Persisted>(initial);
           aiPrefs: (data.user?.profile?.ai_prefs as AiPrefs) ?? s.aiPrefs,
         }));
       }
-    } catch {
-      /* offline: the local prototype store still works */
+      if (data.user) {
+        const revision = activity.revision;
+        const response = await fetch("/api/activity", { cache: "no-store", headers: { "x-earnly-user": data.user.id } });
+        const payload = (await response.json()) as { activity?: ActivityState };
+        if (!response.ok || !payload.activity) throw new Error("Activity lookup failed.");
+        if (version === refreshVersion.current) activity.hydrate(payload.activity, revision);
+      }
+    } catch (error) {
+      console.error("[earnly] session/activity refresh failed", error);
+      // No-account visits retain the local prototype; a known real account
+      // starts empty on read failure instead of inheriting another account/demo.
     }
-  }, []);
+  }, [activity]);
 
   useEffect(() => {
     // Read back the persisted prototype store first so a no-account visit still
@@ -249,8 +268,13 @@ const [state, setState] = useState<Persisted>(initial);
       // Hydration: the persisted store can only be read on the client, so this
       // one synchronous setState is the intentional hand-off from SSR. The
       // splash in AppShell keeps the first paint identical.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (raw) setState(loadPersisted(raw));
+      if (raw) {
+        const persisted = loadPersisted(raw);
+        demoActivity.current = activitySlice(persisted);
+        activity.reset(null, persisted);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setState(persisted);
+      }
     } catch {
       /* a prototype store; a corrupt value just starts fresh */
     }
@@ -261,18 +285,26 @@ const [state, setState] = useState<Persisted>(initial);
     })();
     return () => {
       cancelled = true;
+      // This is a request generation counter, not a DOM ref: invalidate all
+      // outstanding session lookups when this provider is disposed.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      refreshVersion.current++;
+      activity.dispose();
     };
-  }, [refresh]);
+  }, [refresh, activity]);
 
   useEffect(() => {
     if (!ready) return;
     try {
-      window.localStorage.setItem(KEY, serializePersisted(state));
+      if (!user) demoActivity.current = activitySlice(state);
+      // Real account activity is server-owned; do not carry it into a later
+      // anonymous visit or another account through the prototype cache.
+      window.localStorage.setItem(KEY, serializePersisted(user ? { ...state, ...demoActivity.current } : state));
     } catch {
       /* private mode */
     }
     document.documentElement.dataset.theme = state.theme;
-  }, [state, ready]);
+  }, [state, ready, user]);
 
   const update = useCallback((patch: Partial<Persisted>) => {
     setState((s) => ({ ...s, ...patch }));
@@ -357,13 +389,15 @@ const [state, setState] = useState<Persisted>(initial);
       signIn: (method) =>
         update({ signedIn: true, authMethod: method, verification: "required" }),
       signOut: async () => {
+        refreshVersion.current++;
+        activity.reset(null, initial);
+        setUser(null);
+        setState({ ...initial, theme: state.theme });
         try {
           await fetch("/api/auth/signout", { method: "POST" });
         } catch {
           /* signing out locally is enough */
         }
-        setUser(null);
-        setState({ ...initial, theme: state.theme });
       },
       submitVerification: (patch) =>
         save({ verification: "pending", ...(patch ?? {}) }),
@@ -393,61 +427,31 @@ const [state, setState] = useState<Persisted>(initial);
       saveAiPrefs: (prefs) => {
         void save({ aiPrefs: prefs }, { quiet: true });
       },
-      apply: (opportunityId, note) =>
-        setState((s) =>
-          s.applications.some((a) => a.opportunityId === opportunityId)
-            ? s
-            : {
-                ...s,
-                applications: [
-                  buildApplication(opportunityId, note),
-                  ...s.applications,
-                ],
-              }
-        ),
-      advance: (applicationId) =>
-        setState((s) => ({
-          ...s,
-          applications: s.applications.map((a) =>
-            a.id === applicationId
-              ? { ...a, stage: nextStage(a.stage), updatedDaysAgo: 0 }
-              : a
-          ),
-        })),
-      toggleSaved: (opportunityId) =>
-        setState((s) => ({
-          ...s,
-          saved: s.saved.includes(opportunityId)
-            ? s.saved.filter((x) => x !== opportunityId)
-            : [opportunityId, ...s.saved],
-        })),
-      markAllRead: () =>
-        setState((s) => ({
-          ...s,
-          notifications: s.notifications.map((n) => ({ ...n, unread: false })),
-        })),
+      apply: (opportunityId, note) => {
+        if (activity.state.applications.some((a) => a.opportunityId === opportunityId)) return;
+        const application = buildApplication(opportunityId, note);
+        activity.dispatch({ type: "apply", applicationId: application.id, opportunityId, note: application.note });
+      },
+      advance: (applicationId) => {
+        const application = activity.state.applications.find((a) => a.id === applicationId);
+        if (application && application.stage !== "Paid") activity.dispatch({ type: "advance", applicationId, expectedStage: application.stage });
+      },
+      toggleSaved: (opportunityId) => activity.dispatch({ type: "saved", opportunityId, saved: !activity.state.saved.includes(opportunityId) }),
+      markAllRead: () => activity.dispatch({ type: "read", notificationIds: activity.state.notifications.filter((n) => n.unread).map((n) => n.id) }),
       setTheme: (theme) => update({ theme }),
       reset: () => {
+        if (user) {
+          void refresh();
+          return;
+        }
+        activity.reset(null, initial);
         setState(initial);
         setAiResults(null);
       },
     };
-  }, [state, ready, aiResults, update, user, database, save, refresh]);
+  }, [state, ready, aiResults, update, user, database, save, refresh, activity]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
-}
-
-function nextStage(stage: AppStage): AppStage {
-  const order: AppStage[] = [
-    "Applied",
-    "Accepted",
-    "In progress",
-    "Submitted",
-    "Completed",
-    "Paid",
-  ];
-  const i = order.indexOf(stage);
-  return order[Math.min(i + 1, order.length - 1)];
 }
 
 export function useApp() {
