@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - master
+      - fix/ci-lint-test-build-17
   pull_request:
     branches:
       - main
       - master
+  workflow_dispatch:
 
 jobs:
   ci:
