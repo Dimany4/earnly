@@ -127,7 +127,7 @@ interface Ctx extends Persisted {
   resetVerification: () => Promise<boolean>;
   completeOnboarding: (prefs: AiPrefs, patch?: ProfilePatch) => Promise<boolean>;
   saveAiPrefs: (prefs: AiPrefs) => void;
-  apply: (opportunityId: string) => void;
+  apply: (opportunityId: string, note?: string) => void;
   advance: (applicationId: string) => void;
   toggleSaved: (opportunityId: string) => void;
   markAllRead: () => void;
@@ -137,10 +137,30 @@ interface Ctx extends Persisted {
   reset: () => void;
 }
 
+/** Max length for an application note — enforced client-side (textarea)
+ * and store-side (truncate). Documented in the apply flow. */
+export const NOTE_MAX = 500;
+
+/** Build the application record for a fresh apply. The note is optional;
+ *  when present it's truncated to NOTE_MAX (store-side defense — the UI
+ *  caps the textarea but a caller could bypass it). */
+export function buildApplication(
+  opportunityId: string,
+  note?: string,
+): Application {
+  return {
+    id: `a${Date.now()}`,
+    opportunityId,
+    stage: "Applied",
+    updatedDaysAgo: 0,
+    ...(note ? { note: note.slice(0, NOTE_MAX) } : {}),
+  };
+}
+
 const AppCtx = createContext<Ctx | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<Persisted>(initial);
+const [state, setState] = useState<Persisted>(initial);
   const [ready, setReady] = useState(false);
   const [aiResults, setAiResults] = useState<AiResult[] | null>(null);
   const [user, setUser] = useState<SessionUser | null>(null);
@@ -308,19 +328,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       saveAiPrefs: (prefs) => {
         void save({ aiPrefs: prefs }, { quiet: true });
       },
-      apply: (opportunityId) =>
+      apply: (opportunityId, note) =>
         setState((s) =>
           s.applications.some((a) => a.opportunityId === opportunityId)
             ? s
             : {
                 ...s,
                 applications: [
-                  {
-                    id: `a${Date.now()}`,
-                    opportunityId,
-                    stage: "Applied" as AppStage,
-                    updatedDaysAgo: 0,
-                  },
+                  buildApplication(opportunityId, note),
                   ...s.applications,
                 ],
               }
