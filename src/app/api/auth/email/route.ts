@@ -3,10 +3,20 @@ import { cleanEmail, signInWithEmail, signUpWithEmail } from "@/lib/auth";
 import { createSession, loadUser } from "@/lib/session";
 import { databaseConfigured } from "@/lib/db";
 import { provisionAfterSignIn } from "@/lib/chain/provisioning";
+import { assertSameOrigin, CsrfError } from "@/lib/csrf";
+import { errorResponse } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  try {
+    assertSameOrigin(req);
+  } catch (e) {
+    if (e instanceof CsrfError)
+      return errorResponse("forbidden", e.message, 403);
+    throw e;
+  }
+
   if (!databaseConfigured) {
     return NextResponse.json(
       { error: "Accounts are not configured on this deployment yet." },
@@ -17,14 +27,14 @@ export async function POST(req: NextRequest) {
   try {
     body = (await req.json()) as typeof body;
   } catch {
-    return NextResponse.json({ error: "Malformed request." }, { status: 400 });
+    return errorResponse("bad_request", "Malformed request.", 400);
   }
 
   const email = cleanEmail(body.email);
   const password = typeof body.password === "string" ? body.password : "";
-  if (!email) return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+  if (!email) return errorResponse("bad_request", "Enter a valid email address.", 400);
   if (password.length < 8) {
-    return NextResponse.json({ error: "Use at least 8 characters for your password." }, { status: 400 });
+    return errorResponse("bad_request", "Use at least 8 characters for your password.", 400);
   }
 
   try {
@@ -32,7 +42,7 @@ export async function POST(req: NextRequest) {
       body.mode === "signin"
         ? await signInWithEmail(email, password)
         : await signUpWithEmail(email, password);
-    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 401 });
+    if (!result.ok) return errorResponse("unauthorized", result.error ?? "Sign-in failed.", 401);
     await createSession(result.userId, req.headers.get("user-agent"));
     await provisionAfterSignIn(result.userId);
     const user = await loadUser(result.userId);
