@@ -43,6 +43,12 @@ export async function POST(req: NextRequest) {
         ? await signInWithEmail(email, password)
         : await signUpWithEmail(email, password);
     if (!result.ok) return errorResponse("unauthorized", result.error ?? "Sign-in failed.", 401);
+    if (body.mode !== "signin") {
+      // Sign-up never discloses whether the email existed — the body is
+      // identical for new and existing accounts, and no session is
+      // created on this path (the user signs in next).
+      return NextResponse.json({ ok: true, next: "/signin" });
+    }
     await createSession(result.userId, req.headers.get("user-agent"));
     await provisionAfterSignIn(result.userId);
     const user = await loadUser(result.userId);
