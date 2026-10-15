@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { EarnlyMark } from "@/components/AppShell";
 import { Faq } from "@/components/landing/Faq";
@@ -7,6 +9,32 @@ import { SiteFooter } from "@/components/landing/SiteFooter";
 import { Testimonials } from "@/components/landing/Testimonials";
 import { Button, Icon, Money, Stars, Tag, VerifiedBadge } from "@/components/ui";
 import { CATEGORIES, COMING_SOON, DEMO_REVIEWS } from "@/lib/data";
+
+const title = "Earnly — earn while you learn";
+const description =
+  "Discover paid tasks, jobs and internships for verified students. Get paid in USDC and graduate with a record of real work.";
+const socialImage = {
+  url: "/img/hero-campus.jpg",
+  alt: "A university campus building with the path leading up to it",
+};
+
+export const metadata: Metadata = {
+  title,
+  description,
+  openGraph: {
+    type: "website",
+    siteName: "Earnly",
+    title,
+    description,
+    images: [socialImage],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+    images: [socialImage],
+  },
+};
 
 const STEPS = [
   {
@@ -135,10 +163,13 @@ export default function LandingPage() {
           {/* hero collage: the campus photo with the product hung over it */}
           <div className="relative">
             <div className="tagshape-r relative overflow-hidden border border-rule">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="/img/hero-campus.jpg"
                 alt="A university campus building with the path leading up to it"
+                width={2000}
+                height={1500}
+                sizes="(min-width: 1240px) 595px, (min-width: 1024px) 50vw, calc(100vw - 40px)"
+                preload
                 className="h-[320px] w-full object-cover grayscale-[.35] contrast-[1.05] sm:h-[420px] lg:h-[500px]"
               />
               <div
@@ -177,10 +208,11 @@ export default function LandingPage() {
 
               {/* floating student chip */}
               <div className="settle absolute bottom-5 left-4 flex items-center gap-3 rounded-[18px] rounded-bl-[3px] border border-white/15 bg-[#0B1020]/85 p-3 backdrop-blur sm:left-6">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src="/img/avatar-1.jpg"
                   alt=""
+                  width={44}
+                  height={44}
                   className="h-11 w-11 rounded-full object-cover"
                 />
                 <div>
@@ -361,8 +393,7 @@ export default function LandingPage() {
               {DEMO_REVIEWS.slice(0, 2).map((r) => (
                 <article key={r.id} className="tagshape border border-rule bg-raised p-5">
                   <div className="flex items-center gap-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={r.avatar} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    <Image src={r.avatar} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover" />
                     <div className="min-w-0">
                       <div className="truncate text-[13.5px] font-bold">{r.author}</div>
                       <div className="text-[11.5px] text-ink3">{r.ago}</div>
@@ -482,10 +513,12 @@ export default function LandingPage() {
       <section className="border-t border-rule">
         <div className="mx-auto max-w-[1240px] px-5 py-16">
           <div className="tagshape relative overflow-hidden border border-rule">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src="/img/students-lawn.jpg"
               alt="Students on a campus lawn at the end of the day"
+              width={1600}
+              height={1067}
+              sizes="(min-width: 1240px) 1200px, calc(100vw - 40px)"
               className="h-[340px] w-full object-cover grayscale-[.3] sm:h-[420px]"
             />
             <div

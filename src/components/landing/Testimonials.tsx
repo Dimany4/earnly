@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Icon, Stars } from "@/components/ui";
 
 const PEOPLE = [
@@ -54,10 +55,11 @@ export function Testimonials() {
                 “{p.quote}”
               </blockquote>
               <figcaption className="mt-6 flex items-center gap-3 border-t border-rule pt-5">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
+                <Image
                   src={p.avatar}
                   alt=""
+                  width={44}
+                  height={44}
                   className="h-11 w-11 flex-none rounded-full object-cover"
                 />
                 <div className="min-w-0">
