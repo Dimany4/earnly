@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EarnlyMark } from "@/components/AppShell";
 import { Icon } from "@/components/ui";
+import { CurrentYear } from "./CurrentYear";
 
 const GITHUB = "https://github.com/Cyon0x/earnly";
 const EMAIL = "Cyon0x@users.noreply.github.com";
@@ -97,7 +98,7 @@ export function SiteFooter() {
 
         <div className="mt-12 flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-rule pt-6">
           <span className="text-[12.5px] text-ink3">
-            © {new Date().getFullYear()} Earnly. Prototype — demo data throughout.
+            © <CurrentYear initialYear={new Date().getFullYear()} /> Earnly. Prototype — demo data throughout.
           </span>
           <span className="text-[12.5px] text-ink3">
             Paid in USDC · Off-ramp to local currency coming soon
