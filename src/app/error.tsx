@@ -5,7 +5,6 @@ import { EmptyState, Button } from "@/components/ui";
 /** Root error boundary — a thrown render error lands on this designed
  * fallback (the app's own EmptyState) with a retry, not Next's bare page. */
 export default function GlobalError({
-  error,
   reset,
 }: {
   error: Error & { digest?: string };
