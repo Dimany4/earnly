@@ -401,9 +401,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       },
       submitVerification: (patch) =>
         save({ verification: "pending", ...(patch ?? {}) }),
-      approveVerification: () => save({ verification: "verified" }),
-      failVerification: () => save({ verification: "failed" }),
-      resetVerification: () => save({ verification: "required" }),
+      // Simulate-* are demo simulators: they flip LOCAL state only and
+      // never write through the profile API — a signed-in user's stored
+      // verification is server-derived and snaps back on refresh().
+      approveVerification: () => {
+        update({ verification: "verified" });
+        return Promise.resolve(true);
+      },
+      failVerification: () => {
+        update({ verification: "failed" });
+        return Promise.resolve(true);
+      },
+      resetVerification: () => {
+        update({ verification: "required" });
+        return Promise.resolve(true);
+      },
       completeOnboarding: (prefs, patch) =>
         save({
           onboarded: true,
