@@ -27,7 +27,6 @@ const BACK: Record<string, { href: string; label: string }> = {
 export function OpportunityDetail({ id }: { id: string }) {
   const o = findOpportunity(id);
   const { applications, apply } = useApp();
-  const [applied, setApplied] = useState(false);
   const [openApply, setOpenApply] = useState(false);
   const [note, setNote] = useState("");
 
@@ -176,12 +175,12 @@ export function OpportunityDetail({ id }: { id: string }) {
         {/* ----------------------------------------------------- side */}
         <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
           <div className="tagshape border border-rule bg-raised p-5">
-            {existing || applied ? (
+            {existing ? (
               <div>
                 <div className="flex items-center gap-2 text-positive">
                   <Icon name="check" size={17} />
                   <span className="text-[14px] font-bold">
-                    {existing ? `Application ${existing.stage.toLowerCase()}` : "Application sent"}
+                    {`Application ${existing.stage.toLowerCase()}`}
                   </span>
                 </div>
                 {existing?.note && (
@@ -308,9 +307,7 @@ export function OpportunityDetail({ id }: { id: string }) {
           className="mt-5"
           onClick={() => {
             apply(o.id, note.trim() || undefined);
-            setApplied(true);
             setOpenApply(false);
-            setNote("");
           }}
         >
           Send application
