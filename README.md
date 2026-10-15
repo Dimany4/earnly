@@ -32,6 +32,17 @@ npm run wallet:live-check
 Node 20.9+ (Next.js 16 requirement). Fonts are self-hosted in `public/fonts`,
 so the build does not need network access.
 
+### Prototype storage versions
+
+The `earnly:v3` localStorage key stores `{ v: 1, data: ... }`. The loader in
+`src/lib/store-persistence.ts` migrates the old unwrapped object (v0) to v1,
+retaining known, valid fields. As a migration example, legacy data without
+`aiPrefs` inherits its saved `prefs`. Removed fields are dropped; invalid
+fields use defaults, and corrupt JSON or unknown versions start fresh.
+The session lookup and `ready` timing stay unchanged. When changing the
+persisted shape, add an explicit version migration and regression tests;
+`tests/store-persistence.test.ts` covers v0 → v1 and save/reload round trips.
+
 ### Environment variables
 
 Copy the shape below into `.env.local` for development, and set the same keys

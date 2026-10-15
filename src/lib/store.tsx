@@ -62,7 +62,7 @@ export interface SessionUser {
   skills: string[];
 }
 
-interface Persisted {
+export interface Persisted {
   signedIn: boolean;
   authMethod: "google" | "email" | null;
   verification: VerificationState;
