@@ -7,7 +7,13 @@ import {
   feeStats,
   reconcileStellarTransaction,
 } from "@/lib/chain/stellar";
-import { ensureWallet, listTransactions, markBalanceSynced, publicWallet } from "@/lib/chain/wallets";
+import {
+  ensureWallet,
+  listTransactions,
+  mapConcurrent,
+  markBalanceSynced,
+  publicWallet,
+} from "@/lib/chain/wallets";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +34,16 @@ export async function GET(request: Request) {
     // Resolve anything left in flight before reporting a status. Best effort:
     // a Horizon hiccup must not break the dashboard.
     const rows = await listTransactions(guard.user.id, "stellar", 25);
-    for (const row of rows) {
-      if ((row.status === "pending" || row.status === "unknown") && row.tx_hash) {
+    const pendingRows = rows.filter(
+      (row) => (row.status === "pending" || row.status === "unknown") && row.tx_hash
+    );
+    await mapConcurrent(pendingRows, 5, async (row) => {
+      try {
         await reconcileStellarTransaction(guard.user.id, row);
+      } catch {
+        // Best effort: a Horizon hiccup must not break the dashboard
       }
-    }
+    });
 
     const [account, fees] = await Promise.all([accountSnapshot(wallet.address), feeStats()]);
     const activity = await stellarActivityFor(wallet, historyLimit);
