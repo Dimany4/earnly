@@ -3,6 +3,7 @@ import "./globals.css";
 import { AppProvider } from "@/lib/store";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.APP_URL || "https://earnly-app.vercel.app"),
   title: "Earnly — earn while you learn",
   description:
     "Verified students discover paid tasks, jobs and internships, get paid in USDC, and graduate with a record of real work instead of an empty CV.",
