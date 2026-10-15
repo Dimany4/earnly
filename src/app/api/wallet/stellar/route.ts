@@ -7,6 +7,13 @@ import {
   feeStats,
   reconcileStellarTransaction,
 } from "@/lib/chain/stellar";
+import {
+  ensureWallet,
+  listTransactions,
+  mapConcurrent,
+  markBalanceSynced,
+  publicWallet,
+} from "@/lib/chain/wallets";
 import { ensureWallet, listTransactions, markBalanceSynced, publicWallet } from "@/lib/chain/wallets";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
 import { mapConcurrent } from "@/lib/concurrency";
@@ -38,6 +45,16 @@ export async function GET(request: Request) {
     // Resolve anything left in flight before reporting a status. Best effort:
     // a Horizon hiccup must not break the dashboard.
     const rows = await listTransactions(guard.user.id, "stellar", 25);
+    const pendingRows = rows.filter(
+      (row) => (row.status === "pending" || row.status === "unknown") && row.tx_hash
+    );
+    await mapConcurrent(pendingRows, 5, async (row) => {
+      try {
+        await reconcileStellarTransaction(guard.user.id, row);
+      } catch {
+        // Best effort: a Horizon hiccup must not break the dashboard
+      }
+    });
     // Bounded-concurrency reconcile — 5 Horizon/RPC calls at a time
     // instead of serial (each was an unbounded round-trip). Per-row
     // failures collect into `failures`; one stuck row can't block the batch.
