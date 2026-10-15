@@ -4,6 +4,7 @@ import { db, databaseConfigured } from "@/lib/db";
 import { getSession } from "@/lib/session";
 import { COUNTRIES, searchUniversities, type University } from "@/lib/universities";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
+import { errorResponse } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -41,31 +42,31 @@ export async function POST(req: NextRequest) {
     assertSameOrigin(req);
   } catch (e) {
     if (e instanceof CsrfError)
-      return NextResponse.json({ error: e.message }, { status: 403 });
+      return errorResponse("forbidden", e.message, 403);
     throw e;
   }
 
   if (!databaseConfigured) {
-    return NextResponse.json({ error: "Database is not configured." }, { status: 503 });
+    return errorResponse("unavailable", "Database is not configured.", 503);
   }
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Sign in to add a university." }, { status: 401 });
+  if (!session) return errorResponse("unauthorized", "Sign in to add a university.", 401);
 
   let body: { name?: unknown; country?: unknown; city?: unknown };
   try {
     body = (await req.json()) as typeof body;
   } catch {
-    return NextResponse.json({ error: "Malformed request." }, { status: 400 });
+    return errorResponse("bad_request", "Malformed request.", 400);
   }
 
   const name = cleanText(body.name, 160);
   const country = cleanText(body.country, 80);
   const city = cleanText(body.city, 80) ?? null;
   if (!name || name.length < 3) {
-    return NextResponse.json({ error: "Enter the full name of your university." }, { status: 400 });
+    return errorResponse("bad_request", "Enter the full name of your university.", 400);
   }
   if (!country) {
-    return NextResponse.json({ error: "Select the country your university is in." }, { status: 400 });
+    return errorResponse("bad_request", "Select the country your university is in.", 400);
   }
 
   const id = `c-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60)}`;
@@ -82,6 +83,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     console.error("[earnly] custom university insert failed", error);
-    return NextResponse.json({ error: "We could not save that university." }, { status: 500 });
+    return errorResponse("internal", "We could not save that university.", 500);
   }
 }

@@ -4,6 +4,7 @@ import { db, databaseConfigured } from "@/lib/db";
 import { getSession, loadUser } from "@/lib/session";
 import { ALL_SKILLS, MAX_SKILLS, mergeSkills } from "@/lib/skills";
 import { assertSameOrigin, CsrfError } from "@/lib/csrf";
+import { errorResponse } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ function stringList(value: unknown, max: number, itemMax = 40): string[] | null 
 
 export async function GET() {
   const user = await getSession();
-  if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!user) return errorResponse("unauthorized", "Not signed in.", 401);
   return NextResponse.json({ user });
 }
 
@@ -35,21 +36,21 @@ export async function PUT(req: NextRequest) {
     assertSameOrigin(req);
   } catch (e) {
     if (e instanceof CsrfError)
-      return NextResponse.json({ error: e.message }, { status: 403 });
+      return errorResponse("forbidden", e.message, 403);
     throw e;
   }
 
   if (!databaseConfigured) {
-    return NextResponse.json({ error: "Database is not configured." }, { status: 503 });
+    return errorResponse("unavailable", "Database is not configured.", 503);
   }
   const session = await getSession();
-  if (!session) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
+  if (!session) return errorResponse("unauthorized", "Not signed in.", 401);
 
   let body: Record<string, unknown>;
   try {
     body = (await req.json()) as Record<string, unknown>;
   } catch {
-    return NextResponse.json({ error: "Malformed request." }, { status: 400 });
+    return errorResponse("bad_request", "Malformed request.", 400);
   }
 
   const patch: Record<string, unknown> = {};
@@ -104,7 +105,7 @@ export async function PUT(req: NextRequest) {
     const name = cleanText(university.name, 160);
     const country = cleanText(university.country, 80);
     if (!name || !country) {
-      return NextResponse.json({ error: "A university needs a name and a country." }, { status: 400 });
+      return errorResponse("bad_request", "A university needs a name and a country.", 400);
     }
     set("university_id", cleanText(university.id, 200) ?? `custom-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`);
     set("university_name", name);
@@ -155,6 +156,6 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ ok: true, user });
   } catch (error) {
     console.error("[earnly] profile update failed", error);
-    return NextResponse.json({ error: "We could not save that. Please try again." }, { status: 500 });
+    return errorResponse("internal", "We could not save that. Please try again.", 500);
   }
 }
